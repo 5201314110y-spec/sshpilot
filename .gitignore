@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# PyInstaller build output
+backend/build/
+backend/dist/
+backend/static/        # generated from frontend/dist during build
+*.spec.bak
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+
+# App runtime data (DB, API keys, encryption key) — never commit
+sshpilot_data/
+*.db
+
+# Env / secrets
+.env
+*.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

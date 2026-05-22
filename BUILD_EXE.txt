@@ -1,0 +1,49 @@
+SSHPilot — How to get SSHPilot.exe
+===================================
+
+You have two ways to get the Windows .exe. Pick ONE.
+
+
+OPTION A — Cloud build (no Windows machine needed)  * recommended
+------------------------------------------------------------------
+A GitHub Actions workflow builds the exe for you on a Windows cloud runner.
+
+  1. Create an empty repo on GitHub.
+  2. Push this project:
+        git init
+        git add .
+        git commit -m "SSHPilot"
+        git branch -M main
+        git remote add origin https://github.com/<you>/<repo>.git
+        git push -u origin main
+  3. On GitHub: open the "Actions" tab -> wait for "Build Windows EXE"
+     to finish (green check, ~3-5 min).
+  4. Open that run -> scroll to "Artifacts" -> download "SSHPilot-windows".
+     Unzip -> SSHPilot.exe.
+
+  Want a permanent download link? Push a tag:
+        git tag v0.1.0
+        git push origin v0.1.0
+  The exe gets attached to a GitHub Release automatically.
+
+
+OPTION B — Build locally on your own Windows PC
+------------------------------------------------
+Requires Python 3.10+ and Node.js 18+ on PATH.
+
+  1. Open Command Prompt.
+  2. cd into the "backend" folder.
+  3. Run:   build.bat
+  Result:   backend\dist\SSHPilot.exe
+
+
+FIRST RUN (either option)
+-------------------------
+  - Double-click SSHPilot.exe. A console opens and your browser launches.
+  - Paste your Anthropic API key (one time).
+  - Register an account, add a server, start operating it.
+  - Data is saved in  sshpilot_data\  next to the exe. Delete it to reset.
+  - Close the console window to quit.
+
+NOTE: A Windows .exe can only be built on Windows. Both options above run
+the build on Windows (cloud or your PC). You never edit any code.
