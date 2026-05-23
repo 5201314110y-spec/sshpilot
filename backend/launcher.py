@@ -3,44 +3,40 @@
 This is the PyInstaller entry point. It boots the FastAPI server on a local
 port and opens the default browser. Closing the console window stops the app.
 """
-import socket
-import threading
-import time
-import webbrowser
-
-import uvicorn
-
-from app.main import app
-
-HOST = "127.0.0.1"
-
-
-def _find_free_port(preferred: int = 8000) -> int:
-    """Use the preferred port if free, otherwise let the OS pick one."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind((HOST, preferred))
-            return preferred
-        except OSError:
-            s.bind((HOST, 0))
-            return s.getsockname()[1]
-
-
-def _open_browser_when_ready(port: int) -> None:
-    url = f"http://{HOST}:{port}"
-    # Poll the health endpoint until the server answers, then open the browser.
-    import urllib.request
-
-    for _ in range(50):
-        try:
-            urllib.request.urlopen(f"{url}/api/health", timeout=0.5)
-            break
-        except Exception:  # noqa: BLE001
-            time.sleep(0.2)
-    webbrowser.open(url)
+import sys
 
 
 def main() -> None:
+    import socket
+    import threading
+    import time
+    import webbrowser
+    import urllib.request
+
+    import uvicorn
+    from app.main import app
+
+    HOST = "127.0.0.1"
+
+    def _find_free_port(preferred: int = 8000) -> int:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((HOST, preferred))
+                return preferred
+            except OSError:
+                s.bind((HOST, 0))
+                return s.getsockname()[1]
+
+    def _open_browser_when_ready(port: int) -> None:
+        url = f"http://{HOST}:{port}"
+        for _ in range(50):
+            try:
+                urllib.request.urlopen(f"{url}/api/health", timeout=0.5)
+                break
+            except Exception:  # noqa: BLE001
+                time.sleep(0.2)
+        webbrowser.open(url)
+
     port = _find_free_port(8000)
     print("=" * 52)
     print("  SSHPilot — agentic terminal")
@@ -52,4 +48,14 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        import traceback
+        print("\n" + "=" * 52)
+        print("  SSHPilot crashed. Error details:")
+        print("=" * 52)
+        traceback.print_exc()
+        print("\nPress Enter to close this window...")
+        input()
+        sys.exit(1)
