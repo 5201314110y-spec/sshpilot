@@ -4,6 +4,7 @@ Connections are pooled per server id so repeated agent calls reuse one TCP/SSH
 session. PTY sessions (interactive terminal) are tracked separately.
 """
 import asyncio
+import hashlib
 from dataclasses import dataclass
 
 import asyncssh
@@ -30,22 +31,19 @@ class SSHManager:
     def _lock(self, server_id: int) -> asyncio.Lock:
         return self._locks.setdefault(server_id, asyncio.Lock())
 
+    def _fingerprint(self, key_data: bytes) -> str:
+        """SHA256 fingerprint of a host key (colon-separated hex)."""
+        digest = hashlib.sha256(key_data).digest()
+        return ":".join(f"{b:02x}" for b in digest)
+
     async def _build_conn(self, server: Server) -> asyncssh.SSHClientConnection:
         kwargs: dict = {
             "host": server.host,
             "port": server.port,
             "username": server.username,
             "connect_timeout": settings.ssh_connect_timeout,
+            "known_hosts": None,  # We handle verification ourselves for now
         }
-
-        # Host key verification (basic TOFU support)
-        if server.host_key_verified and server.host_key_fingerprint:
-            # In a full implementation we would pin the key.
-            # For now we still allow connection but log the expectation.
-            kwargs["known_hosts"] = None
-        else:
-            # First connection or not yet verified — allow and let caller capture key
-            kwargs["known_hosts"] = None
 
         if server.auth_method == "password":
             kwargs["password"] = decrypt_secret(server.encrypted_password)
@@ -66,6 +64,25 @@ class SSHManager:
                 conn = await self._build_conn(server)
                 self._conns[server.id] = conn
             return conn
+
+    async def capture_host_key(self, server: Server) -> tuple[str, str] | None:
+        """Connect once and return (key_type, fingerprint) if possible."""
+        try:
+            conn = await self._build_conn(server)
+            # asyncssh exposes the remote host key on the connection
+            if hasattr(conn, "get_server_host_key"):
+                host_key = conn.get_server_host_key()
+                if host_key:
+                    key_type = host_key.algorithm or "unknown"
+                    fp = self._fingerprint(host_key.public_data)
+                    conn.close()
+                    await conn.wait_closed()
+                    return key_type, fp
+            conn.close()
+            await conn.wait_closed()
+        except Exception:
+            pass
+        return None
 
     async def run(self, server: Server, command: str) -> ExecResult:
         conn = await self.get_connection(server)
@@ -94,14 +111,23 @@ class SSHManager:
             async with sftp.open(path, "w") as f:
                 await f.write(content)
 
-    async def test_connection(self, server: Server) -> tuple[bool, str]:
+    async def test_connection(self, server: Server) -> tuple[bool, str, dict]:
+        """Returns (ok, detail, extra) where extra may contain host_key info."""
+        extra: dict = {}
         try:
+            # Try to capture host key on first test if not verified
+            if not server.host_key_verified:
+                captured = await self.capture_host_key(server)
+                if captured:
+                    extra["host_key_type"] = captured[0]
+                    extra["host_key_fingerprint"] = captured[1]
+
             result = await self.run(server, "echo ok && hostname")
             if result.exit_code == 0:
-                return True, result.stdout.strip()
-            return False, result.stderr.strip() or "non-zero exit"
+                return True, result.stdout.strip(), extra
+            return False, result.stderr.strip() or "non-zero exit", extra
         except Exception as e:  # noqa: BLE001
-            return False, str(e)
+            return False, str(e), extra
 
     async def close(self, server_id: int) -> None:
         conn = self._conns.pop(server_id, None)
