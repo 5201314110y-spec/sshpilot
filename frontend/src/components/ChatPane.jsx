@@ -3,14 +3,12 @@ import { api, streamAgentChat } from "../api";
 
 export default function ChatPane({ server }) {
   const [sessionId, setSessionId] = useState(null);
-  const [items, setItems] = useState([]); // {kind, ...}
+  const [items, setItems] = useState([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [pendingApproval, setPendingApproval] = useState(null);
   const logRef = useRef(null);
-  const lastUserMsg = useRef("");
 
-  // Spin up a session whenever the active server changes.
   useEffect(() => {
     if (!server) return;
     setItems([]);
@@ -60,14 +58,12 @@ export default function ChatPane({ server }) {
   async function send() {
     if (!input.trim() || !sessionId || busy) return;
     const message = input.trim();
-    lastUserMsg.current = message;
     push({ kind: "user", text: message });
     setInput("");
     await runAgent(message, false);
   }
 
   async function approve() {
-    // Re-issue the same request with auto-approve so the agent proceeds.
     push({ kind: "user", text: "✓ Approved — proceed." });
     await runAgent("Approved. Proceed with the action.", true);
   }
@@ -128,12 +124,16 @@ export default function ChatPane({ server }) {
         })}
 
         {pendingApproval && (
-          <div className="approval">
-            <div className="h">⚠ Approval required — {pendingApproval.reason}</div>
-            <pre>{pendingApproval.command}</pre>
-            <div className="actions">
+          <div className="approval" style={{ border: "2px solid #e74c3c", background: "#fff5f5" }}>
+            <div className="h" style={{ color: "#c0392b", fontWeight: "bold" }}>
+              ⚠ Approval required — {pendingApproval.reason}
+            </div>
+            <pre style={{ background: "#2c3e50", color: "#ecf0f1", padding: "10px", borderRadius: "4px" }}>
+              {pendingApproval.command}
+            </pre>
+            <div className="actions" style={{ marginTop: "10px" }}>
               <button className="primary" onClick={approve}>
-                Approve &amp; run
+                Approve & run
               </button>
               <button
                 className="danger"
