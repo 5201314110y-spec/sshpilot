@@ -32,9 +32,11 @@ gate on anything destructive.
   strengthened risk classifier (`app/core/risk.py`) that does path blacklisting,
   command parsing, and pattern matching. `DANGEROUS` commands halt the loop and
   require explicit user approval in the UI.
+- **Optional command whitelist** per server (comma-separated base commands).
 - **Credentials encrypted at rest** with Fernet (`app/core/security.py`).
-- **Host key TOFU support**: on `/test` the server captures the host key fingerprint.
-  User can confirm it via `/verify-host-key`.
+- **Host key TOFU + enforcement**: on `/test` the server captures the host key
+  fingerprint. After the user confirms it via `/verify-host-key`, subsequent
+  connections reject mismatched keys.
 - **Everything the agent does is audited** to the `audit_logs` table.
 
 ## Project layout
@@ -53,7 +55,7 @@ sshpilot/
 │   │   │   ├── risk.py          # command risk classifier  ← safety core
 │   │   │   └── database.py      # async SQLAlchemy engine
 │   │   ├── models/
-│   │   │   ├── models.py        # ORM tables (incl. host key fields)
+│   │   │   ├── models.py        # ORM tables (incl. host key + whitelist)
 │   │   │   └── schemas.py       # Pydantic request/response
 │   │   ├── services/
 │   │   │   └── ssh_manager.py   # asyncssh connection pool, exec, sftp
@@ -63,7 +65,7 @@ sshpilot/
 │   │   └── api/
 │   │       ├── deps.py          # auth dependency
 │   │       ├── auth.py          # register / login
-│   │       ├── servers.py       # server CRUD + test + host key verify
+│   │       ├── servers.py       # server CRUD + test + host key + whitelist
 │   │       ├── agent.py         # sessions + streaming chat
 │   │       ├── terminal.py      # WebSocket PTY gateway
 │   │       └── settings.py      # in-app API-key configuration
@@ -180,6 +182,7 @@ In dev you can also drop a `.env` in `backend/sshpilot_data/` with
 | POST | `/api/auth/login` | OAuth2 password → JWT |
 | GET | `/api/servers` | List your servers |
 | POST | `/api/servers` | Add a server (creds encrypted) |
+| PATCH | `/api/servers/{id}` | Update command_whitelist |
 | POST | `/api/servers/{id}/test` | Test SSH connection (also captures host key) |
 | POST | `/api/servers/{id}/verify-host-key` | Confirm captured host key fingerprint |
 | DELETE | `/api/servers/{id}` | Remove a server |
@@ -194,13 +197,12 @@ In dev you can also drop a `.env` in `backend/sshpilot_data/` with
 
 This is an MVP. Before real production use:
 
-1. **Enforce host key pinning** — currently we capture and store the fingerprint;
-   next step is to reject connections when the key changes after verification.
+1. **Host key pinning** — now enforced after verification; consider alerting on mismatch.
 2. **Per-user encryption keys / KMS** — move credential encryption keys into a
    managed KMS or per-user derived keys, not one global key.
 3. **Postgres + connection limits** — swap SQLite, add rate limiting and quotas.
-4. **Sandbox the agent further** — restrict to allow-listed commands per server,
-   add max-blast-radius limits, run agent commands as a deprivileged user.
+4. **Stronger sandboxing** — command whitelist is basic; consider full allow-lists
+   or running agent commands as a deprivileged user.
 5. **Audit UI + alerting** — surface `audit_logs`, alert on dangerous approvals.
 6. **Refresh tokens + RBAC** — short-lived access tokens, team/role scoping.
 7. **Streaming command output** for long-running commands (currently buffered).
