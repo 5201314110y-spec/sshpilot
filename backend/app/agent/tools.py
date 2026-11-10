@@ -1,8 +1,11 @@
 """Tool definitions exposed to the LLM, and the dispatcher that executes them.
 
 Tools are intentionally small and composable. The agent composes them to
-accomplish higher-level goals. `run_command` is gated by the risk classifier.
+accomplish higher-level goals. `run_command` is gated by the risk classifier
+and an optional per-server command whitelist.
 """
+import shlex
+
 from app.core.risk import classify_command, RiskLevel
 from app.models.models import Server
 from app.services.ssh_manager import ssh_manager
@@ -64,6 +67,21 @@ class ApprovalRequired(Exception):
         super().__init__(reason)
 
 
+def _is_whitelisted(command: str, whitelist: str) -> bool:
+    """Return True if the command's base binary is in the whitelist (or whitelist is empty)."""
+    if not whitelist.strip():
+        return True
+    allowed = {c.strip().lower() for c in whitelist.split(",") if c.strip()}
+    try:
+        tokens = shlex.split(command)
+        if not tokens:
+            return False
+        base = tokens[0].split("/")[-1].lower()
+        return base in allowed
+    except ValueError:
+        return False
+
+
 async def dispatch_tool(
     name: str,
     args: dict,
@@ -76,6 +94,14 @@ async def dispatch_tool(
     """
     if name == "run_command":
         command = args["command"]
+
+        # Whitelist check (if configured)
+        if not _is_whitelisted(command, server.command_whitelist):
+            return (
+                f"Command blocked by server whitelist. Allowed: {server.command_whitelist or '(none)'}",
+                {"command": command, "risk_level": "dangerous", "approved": False},
+            )
+
         risk, reason = classify_command(command)
         if risk == RiskLevel.DANGEROUS and not auto_approve:
             raise ApprovalRequired(command, reason)
