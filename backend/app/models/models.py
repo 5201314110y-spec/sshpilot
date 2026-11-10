@@ -36,6 +36,10 @@ class Server(Base):
     encrypted_password: Mapped[str] = mapped_column(Text, default="")
     encrypted_private_key: Mapped[str] = mapped_column(Text, default="")
     encrypted_passphrase: Mapped[str] = mapped_column(Text, default="")
+    # Host key verification (TOFU)
+    host_key_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    host_key_type: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    host_key_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     owner: Mapped["User"] = relationship(back_populates="servers")
