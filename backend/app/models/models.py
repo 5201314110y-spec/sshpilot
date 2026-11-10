@@ -40,6 +40,8 @@ class Server(Base):
     host_key_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     host_key_type: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
     host_key_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Optional command whitelist (comma-separated base commands, empty = allow all)
+    command_whitelist: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     owner: Mapped["User"] = relationship(back_populates="servers")
