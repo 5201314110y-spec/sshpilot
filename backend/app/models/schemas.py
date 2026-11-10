@@ -34,6 +34,9 @@ class ServerOut(BaseModel):
     port: int
     username: str
     auth_method: str
+    host_key_fingerprint: str | None = None
+    host_key_type: str | None = None
+    host_key_verified: bool = False
     created_at: datetime
 
 
