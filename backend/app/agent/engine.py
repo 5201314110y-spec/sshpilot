@@ -38,6 +38,15 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
+def _truncate_output(text: str, limit: int = 6000) -> str:
+    """Keep head + tail so long command output is still useful."""
+    if len(text) <= limit:
+        return text
+    head = text[: limit // 2]
+    tail = text[-(limit // 2) :]
+    return f"{head}\n\n... [truncated {len(text) - limit} chars] ...\n\n{tail}"
+
+
 class Agent:
     def __init__(self) -> None:
         self.client = AsyncAnthropic(api_key=settings.anthropic_api_key)
@@ -53,7 +62,7 @@ class Agent:
         `messages` is the running Anthropic-format conversation; the caller
         persists user/assistant text separately.
         """
-        for _ in range(settings.agent_max_steps):
+        for step in range(settings.agent_max_steps):
             try:
                 resp = await self.client.messages.create(
                     model=settings.agent_model,
@@ -99,14 +108,15 @@ class Agent:
                     output, meta = await dispatch_tool(
                         tu.name, tu.input, server, auto_approve
                     )
+                    display = _truncate_output(output, 4000)
                     yield _sse(
-                        {"type": "tool_result", "name": tu.name, "output": output[:2000]}
+                        {"type": "tool_result", "name": tu.name, "output": display}
                     ), meta
                     tool_results.append(
                         {
                             "type": "tool_result",
                             "tool_use_id": tu.id,
-                            "content": output,
+                            "content": _truncate_output(output, 8000),
                         }
                     )
                 except ApprovalRequired as ar:
@@ -123,7 +133,12 @@ class Agent:
 
             messages.append({"role": "user", "content": tool_results})
 
-        yield _sse({"type": "error", "message": "Max agent steps reached."}), None
+        yield _sse(
+            {
+                "type": "error",
+                "message": f"Max agent steps ({settings.agent_max_steps}) reached. Task may be incomplete.",
+            }
+        ), None
 
 
 agent = Agent()
