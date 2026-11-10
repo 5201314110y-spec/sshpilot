@@ -24,6 +24,7 @@ class ServerCreate(BaseModel):
     password: str | None = None
     private_key: str | None = None
     passphrase: str | None = None
+    command_whitelist: str | None = None
 
 
 class ServerOut(BaseModel):
@@ -37,7 +38,12 @@ class ServerOut(BaseModel):
     host_key_fingerprint: str | None = None
     host_key_type: str | None = None
     host_key_verified: bool = False
+    command_whitelist: str = ""
     created_at: datetime
+
+
+class ServerUpdate(BaseModel):
+    command_whitelist: str | None = None
 
 
 # ---- Sessions / chat ----
