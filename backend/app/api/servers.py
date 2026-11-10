@@ -7,7 +7,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.security import encrypt_secret
 from app.models.models import Server, User
-from app.models.schemas import ServerCreate, ServerOut
+from app.models.schemas import ServerCreate, ServerOut, ServerUpdate
 from app.services.ssh_manager import ssh_manager
 
 router = APIRouter(prefix="/api/servers", tags=["servers"])
@@ -50,8 +50,24 @@ async def create_server(
         encrypted_password=encrypt_secret(payload.password or ""),
         encrypted_private_key=encrypt_secret(payload.private_key or ""),
         encrypted_passphrase=encrypt_secret(payload.passphrase or ""),
+        command_whitelist=payload.command_whitelist or "",
     )
     db.add(server)
+    await db.commit()
+    await db.refresh(server)
+    return server
+
+
+@router.patch("/{server_id}", response_model=ServerOut)
+async def update_server(
+    server_id: int,
+    payload: ServerUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    server = await _get_owned(server_id, user, db)
+    if payload.command_whitelist is not None:
+        server.command_whitelist = payload.command_whitelist
     await db.commit()
     await db.refresh(server)
     return server
