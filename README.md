@@ -7,16 +7,16 @@ gate on anything destructive.
 ```
 ┌──────────── Browser ────────────┐
 │  Terminal (xterm)  │  AI Agent   │
-└─────────┬──────────┴──────┬──────┘
+└─────────┬─────────┴──────┬──────┘
        WS │ PTY       SSE/HTTP │ agent loop
-┌─────────▼──────────────────▼──────┐
+┌─────────▼─────────────────▼──────┐
 │            FastAPI backend         │
 │  WS gateway · agent engine · REST  │
-│  ┌──────────────────────────────┐  │
+│  ┌─────────────────────────────┐  │
 │  │  SSH manager (asyncssh)       │  │
 │  │  risk classifier + approval   │  │
-│  └──────────────────────────────┘  │
-└──────┬───────────────────┬─────────┘
+│  └─────────────────────────────┘  │
+└──────┬─────────────────┬─────────┘
    SQLite              Anthropic API
  (encrypted creds)       (Claude)
         │
@@ -29,10 +29,12 @@ gate on anything destructive.
   (`run_command`, `read_file`, `write_file`) and reasons step-by-step, observing
   real output between actions. See `app/agent/`.
 - **Safety is a separate layer, not a prompt.** Every command is run through a
-  pattern-based risk classifier (`app/core/risk.py`). `DANGEROUS` commands halt
-  the loop and require explicit user approval in the UI. The model cannot talk
-  its way past the gate.
+  strengthened risk classifier (`app/core/risk.py`) that does path blacklisting,
+  command parsing, and pattern matching. `DANGEROUS` commands halt the loop and
+  require explicit user approval in the UI.
 - **Credentials encrypted at rest** with Fernet (`app/core/security.py`).
+- **Host key verification fields** added to the Server model for future TOFU
+  pinning.
 - **Everything the agent does is audited** to the `audit_logs` table.
 
 ## Project layout
@@ -51,7 +53,7 @@ sshpilot/
 │   │   │   ├── risk.py          # command risk classifier  ← safety core
 │   │   │   └── database.py      # async SQLAlchemy engine
 │   │   ├── models/
-│   │   │   ├── models.py        # ORM tables
+│   │   │   ├── models.py        # ORM tables (incl. host key fields)
 │   │   │   └── schemas.py       # Pydantic request/response
 │   │   ├── services/
 │   │   │   └── ssh_manager.py   # asyncssh connection pool, exec, sftp
@@ -65,6 +67,8 @@ sshpilot/
 │   │       ├── agent.py         # sessions + streaming chat
 │   │       ├── terminal.py      # WebSocket PTY gateway
 │   │       └── settings.py      # in-app API-key configuration
+│   ├── tests/
+│   │   └── test_risk.py       # unit tests for risk classifier
 │   └── requirements.txt
 └── frontend/
     ├── src/
@@ -189,8 +193,8 @@ In dev you can also drop a `.env` in `backend/sshpilot_data/` with
 
 This is an MVP. Before real production use:
 
-1. **Pin SSH host keys** — `known_hosts` is currently `None` (TOFU off). Store
-   and verify host keys per server to prevent MITM.
+1. **Pin SSH host keys** — model fields are now present; implement full TOFU
+   capture and verification in the connection flow.
 2. **Per-user encryption keys / KMS** — move credential encryption keys into a
    managed KMS or per-user derived keys, not one global key.
 3. **Postgres + connection limits** — swap SQLite, add rate limiting and quotas.
@@ -199,4 +203,3 @@ This is an MVP. Before real production use:
 5. **Audit UI + alerting** — surface `audit_logs`, alert on dangerous approvals.
 6. **Refresh tokens + RBAC** — short-lived access tokens, team/role scoping.
 7. **Streaming command output** for long-running commands (currently buffered).
-```
