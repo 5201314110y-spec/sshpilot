@@ -64,8 +64,31 @@ async def test_server(
     db: AsyncSession = Depends(get_db),
 ):
     server = await _get_owned(server_id, user, db)
-    ok, detail = await ssh_manager.test_connection(server)
-    return {"ok": ok, "detail": detail}
+    ok, detail, extra = await ssh_manager.test_connection(server)
+
+    # Persist captured host key if we got one and it wasn't verified yet
+    if extra.get("host_key_fingerprint") and not server.host_key_verified:
+        server.host_key_type = extra.get("host_key_type")
+        server.host_key_fingerprint = extra["host_key_fingerprint"]
+        await db.commit()
+        await db.refresh(server)
+
+    return {"ok": ok, "detail": detail, "host_key": extra}
+
+
+@router.post("/{server_id}/verify-host-key")
+async def verify_host_key(
+    server_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark the currently stored host key as verified (user confirmed)."""
+    server = await _get_owned(server_id, user, db)
+    if not server.host_key_fingerprint:
+        raise HTTPException(status_code=400, detail="No host key captured yet. Run /test first.")
+    server.host_key_verified = True
+    await db.commit()
+    return {"ok": True, "fingerprint": server.host_key_fingerprint}
 
 
 @router.delete("/{server_id}")
