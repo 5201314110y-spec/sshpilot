@@ -33,8 +33,8 @@ gate on anything destructive.
   command parsing, and pattern matching. `DANGEROUS` commands halt the loop and
   require explicit user approval in the UI.
 - **Credentials encrypted at rest** with Fernet (`app/core/security.py`).
-- **Host key verification fields** added to the Server model for future TOFU
-  pinning.
+- **Host key TOFU support**: on `/test` the server captures the host key fingerprint.
+  User can confirm it via `/verify-host-key`.
 - **Everything the agent does is audited** to the `audit_logs` table.
 
 ## Project layout
@@ -63,7 +63,7 @@ sshpilot/
 │   │   └── api/
 │   │       ├── deps.py          # auth dependency
 │   │       ├── auth.py          # register / login
-│   │       ├── servers.py       # server CRUD + test
+│   │       ├── servers.py       # server CRUD + test + host key verify
 │   │       ├── agent.py         # sessions + streaming chat
 │   │       ├── terminal.py      # WebSocket PTY gateway
 │   │       └── settings.py      # in-app API-key configuration
@@ -180,7 +180,8 @@ In dev you can also drop a `.env` in `backend/sshpilot_data/` with
 | POST | `/api/auth/login` | OAuth2 password → JWT |
 | GET | `/api/servers` | List your servers |
 | POST | `/api/servers` | Add a server (creds encrypted) |
-| POST | `/api/servers/{id}/test` | Test SSH connection |
+| POST | `/api/servers/{id}/test` | Test SSH connection (also captures host key) |
+| POST | `/api/servers/{id}/verify-host-key` | Confirm captured host key fingerprint |
 | DELETE | `/api/servers/{id}` | Remove a server |
 | POST | `/api/sessions` | Start an agent chat session |
 | GET | `/api/sessions` | List sessions |
@@ -193,8 +194,8 @@ In dev you can also drop a `.env` in `backend/sshpilot_data/` with
 
 This is an MVP. Before real production use:
 
-1. **Pin SSH host keys** — model fields are now present; implement full TOFU
-   capture and verification in the connection flow.
+1. **Enforce host key pinning** — currently we capture and store the fingerprint;
+   next step is to reject connections when the key changes after verification.
 2. **Per-user encryption keys / KMS** — move credential encryption keys into a
    managed KMS or per-user derived keys, not one global key.
 3. **Postgres + connection limits** — swap SQLite, add rate limiting and quotas.
