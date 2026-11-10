@@ -11,6 +11,7 @@ export default function AddServerModal({ onClose, onCreated }) {
     password: "",
     private_key: "",
     passphrase: "",
+    command_whitelist: "",
   });
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
@@ -83,6 +84,14 @@ export default function AddServerModal({ onClose, onCreated }) {
               </div>
             </>
           )}
+          <div className="field">
+            <span className="label">Command whitelist (optional, comma-separated)</span>
+            <input
+              value={f.command_whitelist}
+              onChange={up("command_whitelist")}
+              placeholder="ls,cat,df,systemctl (empty = allow all)"
+            />
+          </div>
         </div>
         {err && <div className="err">{err}</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
