@@ -12,7 +12,7 @@ export default function App() {
   const [servers, setServers] = useState([]);
   const [active, setActive] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [status, setStatus] = useState({}); // serverId -> "up"|"down"
+  const [status, setStatus] = useState({});
 
   async function loadServers() {
     const list = await api.listServers();
@@ -39,8 +39,25 @@ export default function App() {
   async function testConn(s, e) {
     e?.stopPropagation();
     setStatus((p) => ({ ...p, [s.id]: "testing" }));
-    const r = await api.testServer(s.id);
-    setStatus((p) => ({ ...p, [s.id]: r.ok ? "up" : "down" }));
+    try {
+      const r = await api.testServer(s.id);
+      setStatus((p) => ({ ...p, [s.id]: r.ok ? "up" : "down" }));
+      if (r.host_key?.host_key_fingerprint) {
+        loadServers();
+      }
+    } catch (err) {
+      setStatus((p) => ({ ...p, [s.id]: "down" }));
+    }
+  }
+
+  async function verifyKey(s, e) {
+    e?.stopPropagation();
+    try {
+      await api.verifyHostKey(s.id);
+      loadServers();
+    } catch (err) {
+      alert("Failed to verify host key: " + err.message);
+    }
   }
 
   function logout() {
@@ -79,14 +96,28 @@ export default function App() {
               <div className="name">
                 <span className={`dot ${status[s.id] || ""}`} />
                 {s.name}
+                {s.host_key_verified && <span style={{ color: "#27ae60", marginLeft: 6 }}>✓</span>}
               </div>
               <div className="host">
                 {s.username}@{s.host}:{s.port}
               </div>
-              <div style={{ marginTop: 7, display: "flex", gap: 6 }}>
+              {s.host_key_fingerprint && !s.host_key_verified && (
+                <div style={{ fontSize: 10, color: "#e67e22", marginTop: 4 }}>
+                  Host key pending verify
+                </div>
+              )}
+              <div style={{ marginTop: 7, display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button style={{ padding: "2px 8px", fontSize: 11 }} onClick={(e) => testConn(s, e)}>
                   {status[s.id] === "testing" ? "…" : "test"}
                 </button>
+                {s.host_key_fingerprint && !s.host_key_verified && (
+                  <button
+                    style={{ padding: "2px 8px", fontSize: 11, background: "#f39c12", color: "#fff" }}
+                    onClick={(e) => verifyKey(s, e)}
+                  >
+                    verify key
+                  </button>
+                )}
                 <button
                   className="danger"
                   style={{ padding: "2px 8px", fontSize: 11 }}
